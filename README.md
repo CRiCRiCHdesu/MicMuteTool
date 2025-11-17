@@ -1,4 +1,4 @@
-English / [Chinese中文](https://github.com/CRiCRiCHdesu/MicMuteTool/edit/main/README.md#L51)
+English / [Chinese中文](#Chinese中文)
 # MicMuteTool
 A tool for muting the microphone with one click.
 
@@ -47,6 +47,7 @@ fade-in / fade-out animation
 ---
 
 
+## Chinese中文
 
 # MicMuteTool
 一键快捷静音麦克风
