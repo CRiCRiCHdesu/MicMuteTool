@@ -1,0 +1,378 @@
+<Window x:Class="MicMuteTool.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MicMuteTool 设置"
+        Width="720"
+        Height="720"
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        Closed="Window_Closed">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Background="#F4F4F6" BorderBrush="#E0E0E0" BorderThickness="0,0,1,0">
+            <StackPanel>
+                <TextBlock Text="MicMuteTool"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Margin="20,20,20,8" />
+                <TextBlock Text="自定义你的麦克风体验"
+                           Margin="20,0,20,12"
+                           Foreground="#666" />
+                <Button x:Name="HotkeyTabButton"
+                        Margin="16,12,16,0"
+                        Padding="12"
+                        Content="热键设置"
+                        HorizontalContentAlignment="Left"
+                        Click="HotkeyTabButton_Click" />
+                <Button x:Name="SoundTabButton"
+                        Margin="16,12,16,0"
+                        Padding="12"
+                        Content="提示音设置"
+                        HorizontalContentAlignment="Left"
+                        Click="SoundTabButton_Click" />
+                <Button x:Name="MicrophoneTabButton"
+                        Margin="16,12,16,0"
+                        Padding="12"
+                        Content="麦克风设置"
+                        HorizontalContentAlignment="Left"
+                        Click="MicrophoneTabButton_Click" />
+                <Button x:Name="OsdTabButton"
+                        Margin="16,12,16,0"
+                        Padding="12"
+                        Content="OSD 设置"
+                        HorizontalContentAlignment="Left"
+                        Click="OsdTabButton_Click" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="24">
+                <Grid x:Name="HotkeyTab" Visibility="Visible">
+                    <StackPanel>
+                        <TextBlock Text="热键设置" FontSize="20" FontWeight="Bold" />
+                        <TextBlock Text="设置一个快捷键以在任意界面切换麦克风静音状态。"
+                                   Margin="0,4,0,20"
+                                   Foreground="#666" />
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="常规" FontWeight="Bold" />
+                            <CheckBox Content="OSD 显示" Margin="0,8,0,0" IsChecked="{Binding EnableOsd, Mode=TwoWay}" />
+                            <CheckBox Content="提示音通知" Margin="0,6,0,0" IsChecked="{Binding EnableSound, Mode=TwoWay}" />
+                            <CheckBox Content="开机自动启动" Margin="0,6,0,0" IsChecked="{Binding RunOnStartup, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <Border Background="#F8F8FA" Padding="16" CornerRadius="8" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="当前热键" FontWeight="Bold" />
+                                <TextBlock Text="{Binding HotkeyDisplay}" FontSize="18" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="HotkeyHintText"
+                                   Text="点击“设置热键”后，按下新的按键组合。按 ESC 取消。"
+                                   Foreground="#666"
+                                   Margin="0,0,0,12" />
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Width="140"
+                                    Content="设置热键"
+                                    Click="StartHotkeyCapture_Click" />
+                            <Button Width="140" Margin="12,0,0,0"
+                                    Content="恢复默认"
+                                    Click="ResetHotkey_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="SoundTab" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="提示音设置" FontSize="20" FontWeight="Bold" />
+                        <TextBlock Text="自定义静音/取消静音时播放的音频文件与音量。"
+                                   Margin="0,4,0,20"
+                                   Foreground="#666" />
+
+                        <StackPanel Margin="0,0,0,20">
+                            <TextBlock Text="麦克风开启提示音" FontWeight="Bold" />
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding MicOnSoundPath, UpdateSourceTrigger=PropertyChanged}" MinWidth="280"
+                                         Grid.Column="0"/>
+                                <Button Content="浏览..." Margin="8,0,0,0" Padding="12,6"
+                                        Tag="MicOn"
+                                        Click="BrowseSoundButton_Click"
+                                        Grid.Column="1" />
+                                <Button Content="恢复默认" Margin="8,0,0,0" Padding="12,6"
+                                        Tag="MicOn"
+                                        Click="ResetSoundButton_Click"
+                                        Grid.Column="2" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <Slider Width="220" Minimum="0" Maximum="1" TickFrequency="0.05"
+                                        Value="{Binding MicOnVolume, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="60" HorizontalAlignment="Left"
+                                           Text="{Binding MicOnVolume, StringFormat={}{0:P0}}" />
+                                <Button Content="测试播放" Margin="12,0,0,0" Tag="MicOn" Click="TestSoundButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="麦克风静音提示音" FontWeight="Bold" />
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Text="{Binding MicMutedSoundPath, UpdateSourceTrigger=PropertyChanged}" MinWidth="280"
+                                         Grid.Column="0"/>
+                                <Button Content="浏览..." Margin="8,0,0,0" Padding="12,6"
+                                        Tag="MicMuted"
+                                        Click="BrowseSoundButton_Click"
+                                        Grid.Column="1" />
+                                <Button Content="恢复默认" Margin="8,0,0,0" Padding="12,6"
+                                        Tag="MicMuted"
+                                        Click="ResetSoundButton_Click"
+                                        Grid.Column="2" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <Slider Width="220" Minimum="0" Maximum="1" TickFrequency="0.05"
+                                        Value="{Binding MicMutedVolume, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="60" HorizontalAlignment="Left"
+                                           Text="{Binding MicMutedVolume, StringFormat={}{0:P0}}" />
+                                <Button Content="测试播放" Margin="12,0,0,0" Tag="MicMuted" Click="TestSoundButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <ScrollViewer x:Name="MicrophoneTab" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="麦克风设置" FontSize="20" FontWeight="Bold" />
+                        <TextBlock Text="选择是否静音全部设备，或只静音部分麦克风。" Margin="0,4,0,20" Foreground="#666" />
+
+                        <CheckBox Content="静音所有麦克风"
+                                  IsChecked="{Binding MicrophoneMuteAll, Mode=TwoWay}"
+                                  Margin="0,0,0,12" />
+
+                        <Border Background="#F8F8FA" Padding="12" CornerRadius="6" Margin="0,0,0,12">
+                            <TextBlock Text="取消勾选后，可从下方列表中选择要静音的麦克风，支持多选。" TextWrapping="Wrap" />
+                        </Border>
+
+                        <StackPanel Margin="0,0,0,12" IsEnabled="{Binding MicrophoneSelectionEnabled}">
+                            <DockPanel>
+                                <TextBlock Text="自定义静音列表" FontWeight="Bold" />
+                                <Button Content="刷新"
+                                        Padding="10,4"
+                                        Margin="8,0,0,0"
+                                        HorizontalAlignment="Right"
+                                        DockPanel.Dock="Right"
+                                        Click="RefreshMicrophonesButton_Click" />
+                            </DockPanel>
+
+                            <ListView ItemsSource="{Binding MicrophoneDevices}"
+                                      Margin="0,8,0,0"
+                                      BorderBrush="#DDD"
+                                      BorderThickness="1"
+                                      Height="200">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Margin="4"
+                                                  Content="{Binding DisplayName}"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <TextBlock Text="提示：麦克风插拔后请点击“刷新”重新获取列表。"
+                                       Foreground="#666"
+                                       Margin="0,8,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="OsdTab" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="OSD 设置" FontSize="20" FontWeight="Bold" />
+                        <TextBlock Text="自定义 OSD 的文字、颜色、大小、透明度以及位置。" Margin="0,4,0,20" Foreground="#666" />
+
+                        <Border Background="#F8F8FA" Padding="16" CornerRadius="8" Margin="0,0,0,20">
+                            <TextBlock Text="提示：解锁后可以直接用鼠标拖动 OSD 来调整位置。" />
+                        </Border>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="文本" FontWeight="Bold" />
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock Text="开启" Width="80" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding OsdMicOnText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock Text="静音" Width="80" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding OsdMicMutedText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="颜色 (HEX)" FontWeight="Bold" />
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock Text="开启" Width="80" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding OsdMicOnColor, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock Text="静音" Width="80" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding OsdMicMutedColor, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="尺寸" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="宽度" Width="60" />
+                                <Slider Width="220" Minimum="50" Maximum="800" Value="{Binding OsdWidth, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="60" Text="{Binding OsdWidth, StringFormat={}{0:0}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="高度" Width="60" />
+                                <Slider Width="220" Minimum="50" Maximum="300" Value="{Binding OsdHeight, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="60" Text="{Binding OsdHeight, StringFormat={}{0:0}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="字体" Width="60" />
+                                <Slider Width="220" Minimum="16" Maximum="60" Value="{Binding OsdFontSize, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="60" Text="{Binding OsdFontSize, StringFormat={}{0:0}}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="透明度" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="背景" Width="60" />
+                                <Slider Width="220" Minimum="0.05" Maximum="1.0" Value="{Binding OsdOpacity, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="80" Text="{Binding OsdOpacity, StringFormat={}{0:P0}}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="文字" Width="60" />
+                                <Slider Width="220" Minimum="0.05" Maximum="1.0" Value="{Binding OsdContentOpacity, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" Width="80" Text="{Binding OsdContentOpacity, StringFormat={}{0:P0}}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="动画" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <CheckBox Content="启用淡入" IsChecked="{Binding OsdEnableFadeIn, Mode=TwoWay}" />
+                                <CheckBox Content="启用淡出" Margin="24,0,0,0" IsChecked="{Binding OsdEnableFadeOut, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="淡入 (ms)" Width="80" />
+                                <TextBox Width="120"
+                                         IsEnabled="{Binding OsdEnableFadeIn}"
+                                         Text="{Binding OsdFadeInDuration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="淡出 (ms)" Width="80" />
+                                <TextBox Width="120"
+                                         IsEnabled="{Binding OsdEnableFadeOut}"
+                                         Text="{Binding OsdFadeOutDuration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="显示时长 (ms)" Width="120" />
+                                <TextBox Width="120"
+                                         Text="{Binding OsdDisplayDuration, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,16">
+                            <TextBlock Text="位置" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <StackPanel.Resources>
+                                    <Style TargetType="FrameworkElement">
+                                        <Setter Property="Margin" Value="4,0,0,0" />
+                                    </Style>
+                                </StackPanel.Resources>
+                                <TextBlock Text="X:" />
+                                <TextBox Width="80" Margin="4,0,0,0"
+                                         Text="{Binding OsdPositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="IsEnabled" Value="False" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding OsdIsLocked}" Value="False">
+                                                    <Setter Property="IsEnabled" Value="True" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                                <TextBlock Text="Y:" />
+                                <TextBox Width="80" Margin="4,0,0,0"
+                                         Text="{Binding OsdPositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="IsEnabled" Value="False" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding OsdIsLocked}" Value="False">
+                                                    <Setter Property="IsEnabled" Value="True" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                                <CheckBox x:Name="LockOsdCheckBox" Content="锁定位置" Margin="12,0,0,0"
+                                          IsChecked="{Binding OsdIsLocked, Mode=TwoWay}"
+                                          Checked="LockOsdCheckBox_Checked"
+                                          Unchecked="LockOsdCheckBox_Unchecked" />
+                                <Button Content="重置位置" Click="ResetOsdPosition_Click" Margin="12,0,0,0" />
+                            </StackPanel>
+                            <CheckBox Content="显示状态圆点" Margin="0,8,0,0" IsChecked="{Binding OsdShowStatusDot, Mode=TwoWay}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <RepeatButton Content="←" Width="40" Delay="250" Interval="60" Click="NudgeButton_Click" Tag="Left" />
+                                <RepeatButton Content="→" Width="40" Margin="8,0,0,0" Delay="250" Interval="60" Click="NudgeButton_Click" Tag="Right" />
+                                <RepeatButton Content="↑" Width="40" Margin="8,0,0,0" Delay="250" Interval="60" Click="NudgeButton_Click" Tag="Up" />
+                                <RepeatButton Content="↓" Width="40" Margin="8,0,0,0" Delay="250" Interval="60" Click="NudgeButton_Click" Tag="Down" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Text="预览样式" FontWeight="Bold" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <RadioButton x:Name="PreviewStyleOnRadio"
+                                             Content="开启样式"
+                                             IsChecked="True"
+                                             Checked="PreviewStyleOnRadio_Checked" />
+                                <RadioButton x:Name="PreviewStyleMutedRadio"
+                                             Content="静音样式"
+                                             Margin="24,0,0,0"
+                                             Checked="PreviewStyleMutedRadio_Checked" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="PreviewToggleButton" Content="开启预览" Width="120" Click="PreviewToggleButton_Click" />
+                            <Button Content="重置 OSD" Width="120" Click="ResetOsdButton_Click" Margin="12,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="24,0,24,24">
+                <Button Content="保存" Width="120" Click="SaveButton_Click" />
+                <Button Content="取消" Width="120" Margin="12,0,0,0" Click="CancelButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
