@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ﻿<Application x:Class="MicMuteTool.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,14 +7,3 @@
          
     </Application.Resources>
 </Application>
-=======
-﻿<Application x:Class="MicMuteTool.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:MicMuteTool"
-             ShutdownMode="OnExplicitShutdown">
-    <Application.Resources>
-         
-    </Application.Resources>
-</Application>
->>>>>>> dc97ba6 (feat: MD3 UI refactor and robust hotkey compatibility)
