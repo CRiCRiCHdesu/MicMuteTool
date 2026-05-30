@@ -26,11 +26,14 @@ public sealed class CoreHost : Forms.ApplicationContext
     private readonly HotkeyMessageWindow _hotkeyWindow;
     private readonly LowLevelKeyboardProc _keyboardProc;
     private readonly Forms.Timer _hotkeyPollTimer = new() { Interval = 20 };
+    private readonly Forms.Timer _muteGuardTimer = new() { Interval = 500 };
     private MicrophoneSettings _microphones = new();
     private HotkeySetting _hotkey = HotkeySetting.Default();
     private IntPtr _keyboardHook = IntPtr.Zero;
     private bool _hotkeyKeyDown;
     private bool _polledHotkeyDown;
+    private bool? _intendedMuteState;
+    private bool _isEnforcingMute;
     private long _lastToggleTick;
 
     public CoreHost()
@@ -38,9 +41,11 @@ public sealed class CoreHost : Forms.ApplicationContext
         _keyboardProc = KeyboardHookCallback;
         _hotkeyWindow = new HotkeyMessageWindow(TryToggleFromHotkey);
         _hotkeyPollTimer.Tick += (_, _) => CheckPolledHotkey();
+        _muteGuardTimer.Tick += (_, _) => EnforceIntendedMuteState();
         RegisterHotkey(_hotkey);
         InstallKeyboardHook();
         _hotkeyPollTimer.Start();
+        _muteGuardTimer.Start();
         StartPipeLoop();
     }
 
@@ -109,15 +114,16 @@ public sealed class CoreHost : Forms.ApplicationContext
                 return Ok();
             case "getMuteState":
                 UpdateMicrophones(request.Microphones);
-                return Ok(_audioManager.GetMuteState(_microphones));
+                return Ok(GetReportedMuteState());
             case "toggleMute":
                 UpdateMicrophones(request.Microphones);
-                var toggledState = _audioManager.ToggleMute(_microphones);
+                var toggledState = ToggleMuteState();
                 NotifyMuteChanged(toggledState);
                 return Ok(toggledState);
             case "setMute":
                 UpdateMicrophones(request.Microphones);
                 _audioManager.SetMute(request.Mute, _microphones);
+                _intendedMuteState = request.Mute;
                 NotifyMuteChanged(request.Mute);
                 return Ok(request.Mute);
             case "getDevices":
@@ -154,13 +160,62 @@ public sealed class CoreHost : Forms.ApplicationContext
         _lastToggleTick = now;
         try
         {
-            var newState = _audioManager.ToggleMute(_microphones);
+            var newState = ToggleMuteState();
             NotifyMuteChanged(newState);
         }
         catch
         {
             // Core hotkey path is UI-less; direct UI actions still report errors.
         }
+    }
+
+    private bool ToggleMuteState()
+    {
+        var current = _intendedMuteState ?? _audioManager.GetMuteState(_microphones);
+        var newState = !current;
+        _audioManager.SetMute(newState, _microphones);
+        _intendedMuteState = newState;
+        return newState;
+    }
+
+    private void EnforceIntendedMuteState()
+    {
+        if (_shutdown.IsCancellationRequested || _isEnforcingMute || _intendedMuteState != true)
+        {
+            return;
+        }
+
+        _isEnforcingMute = true;
+        try
+        {
+            if (!_audioManager.GetMuteState(_microphones))
+            {
+                _audioManager.SetMute(true, _microphones);
+            }
+        }
+        catch
+        {
+            // Keep the guard alive even if a device briefly disappears.
+        }
+        finally
+        {
+            _isEnforcingMute = false;
+        }
+    }
+
+    private bool GetReportedMuteState()
+    {
+        if (_intendedMuteState != true)
+        {
+            return _audioManager.GetMuteState(_microphones);
+        }
+
+        if (!_audioManager.GetMuteState(_microphones))
+        {
+            _audioManager.SetMute(true, _microphones);
+        }
+
+        return true;
     }
 
     private static void NotifyMuteChanged(bool muteState)
@@ -196,6 +251,7 @@ public sealed class CoreHost : Forms.ApplicationContext
     {
         _shutdown.Cancel();
         _hotkeyPollTimer.Stop();
+        _muteGuardTimer.Stop();
         UninstallKeyboardHook();
         _hotkeyWindow.Dispose();
         ExitThread();
@@ -207,10 +263,12 @@ public sealed class CoreHost : Forms.ApplicationContext
         {
             _shutdown.Cancel();
             _hotkeyPollTimer.Stop();
+            _muteGuardTimer.Stop();
             UninstallKeyboardHook();
             _hotkeyWindow.Dispose();
             _audioManager.Dispose();
             _hotkeyPollTimer.Dispose();
+            _muteGuardTimer.Dispose();
             _shutdown.Dispose();
         }
 
