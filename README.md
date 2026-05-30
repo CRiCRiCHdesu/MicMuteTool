@@ -7,6 +7,7 @@ This software currently provides the following features 👇
 ## 1. Hotkey Settings
 
 🟢 Configurable global hotkey to toggle microphone mute
+
 🟢 Tray icon actions (left-click / right-click menu)
 
 ---
@@ -14,7 +15,9 @@ This software currently provides the following features 👇
 ## 2. Microphone Management
 
 🟢 Supports “mute all” or selecting specific devices by GUID
+
 🟢 Device list only displays currently enabled microphones, with manual refresh
+
 🟢 Mute toggle applies to the selected device; if the device becomes unavailable, it will automatically fall back to the default recording device
 
 ---
@@ -22,6 +25,7 @@ This software currently provides the following features 👇
 ## 3. Sound Notifications
 
 🟢 Separate audio files and volume settings for mute / unmute
+
 🟢 “Browse…” available to select custom audio files, with adjustable volume
 
 ---
@@ -30,15 +34,15 @@ This software currently provides the following features 👇
 
 🟢 Fully configurable:
 
-text, color, font, size
+  text, color, font, size
 
-background & content transparency
+   background & content transparency
 
-status indicator dot
+   status indicator dot
 
-display duration
+   display duration
 
-fade-in / fade-out animation
+   fade-in / fade-out animation
 
 🟢 Supports dragging to reposition the OSD (with option to lock after adjusting)
 
@@ -58,6 +62,7 @@ fade-in / fade-out animation
 ## 1. 快捷键设置
 
 🟢 **可配置全局热键** 切换麦克风静音
+
 🟢 托盘图标：
 
 ---
@@ -65,7 +70,9 @@ fade-in / fade-out animation
 ## 2. 麦克风管理
 
 🟢 支持 **“静音所有”** 或按 **GUID** 选择具体设备
+
 🟢 设备列表仅显示 **当前启用的麦克风**，支持“手动刷新”
+
 🟢 切换静音将作用于所选设备；如设备缺失会 **自动回退到默认录音源**
 
 ---
@@ -73,6 +80,7 @@ fade-in / fade-out animation
 ## 3. 提示音
 
 🟢 分别为 **开启 / 静音** 指定不同的音频文件与音量
+
 🟢 提供“浏览…”选择自定义音频、支持自定义音量大小。
 
 ---
