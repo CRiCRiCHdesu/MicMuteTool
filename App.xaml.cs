@@ -19,32 +19,34 @@ public partial class App : System.Windows.Application
     private const int HotkeyId = 0xA000;
 
     private readonly SettingsService _settingsService = new();
-    private readonly AudioManagerService _audioManagerService = new();
+    private readonly CoreClient _coreClient = new();
     private readonly SoundPlayerService _soundPlayerService = new();
+    private readonly CoreEventListener _coreEventListener;
 
     private AppSettings _settings = new();
     private Forms.NotifyIcon? _notifyIcon;
     private Icon? _iconMicOn;
     private Icon? _iconMicMuted;
     private Icon? _iconSettings;
+    private TrayMenuWindow? _trayMenuWindow;
     private HwndSource? _hotkeySource;
     private bool _isMuted;
     private OsdWindow? _osdWindow;
-    private Forms.ToolStripMenuItem? _settingsMenuItem;
-    private Forms.ToolStripMenuItem? _osdToggleMenuItem;
-    private Forms.ToolStripMenuItem? _soundToggleMenuItem;
-    private bool _updatingMenuChecks;
+    private bool _showLegacySettingsMenuOnce;
     private IntPtr _keyboardHook = IntPtr.Zero;
     private readonly LowLevelKeyboardProc _keyboardProc;
     private bool _hotkeyKeyDown;
     private long _lastToggleTick;
     private readonly DispatcherTimer _hotkeyPollTimer = new() { Interval = TimeSpan.FromMilliseconds(20) };
+    private readonly DispatcherTimer _coreStatePollTimer = new() { Interval = TimeSpan.FromMilliseconds(1000) };
     private bool _polledHotkeyDown;
 
     public App()
     {
+        _coreEventListener = new CoreEventListener(OnCoreMuteChanged);
         _keyboardProc = KeyboardHookCallback;
         _hotkeyPollTimer.Tick += (_, _) => CheckPolledHotkey();
+        _coreStatePollTimer.Tick += (_, _) => PollCoreMuteState();
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -52,21 +54,23 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         _settings = _settingsService.Load();
-        _isMuted = _audioManagerService.GetMuteState(_settings.Microphones);
 
         LoadIcons();
         InitializeTrayIcon();
-        RegisterGlobalHotkey(_settings.ToggleHotkey);
-        InstallKeyboardHook();
-        _hotkeyPollTimer.Start();
 
         _osdWindow = new OsdWindow();
         _osdWindow.ApplySettings(_settings.Osd);
         UpdateStartupRegistration(_settings.RunOnStartup);
+        _coreEventListener.Start();
+        _coreStatePollTimer.Start();
+        _ = Dispatcher.InvokeAsync(InitializeCoreConnection);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayMenuWindow?.Close();
+        _trayMenuWindow = null;
+
         _notifyIcon?.Dispose();
         _notifyIcon = null;
 
@@ -74,17 +78,10 @@ public partial class App : System.Windows.Application
         _iconMicMuted?.Dispose();
         _iconSettings?.Dispose();
 
-        if (_hotkeySource is not null)
-        {
-            UnregisterHotKey(_hotkeySource.Handle, HotkeyId);
-            _hotkeySource.Dispose();
-        }
-
-        UninstallKeyboardHook();
-        _hotkeyPollTimer.Stop();
-
         _osdWindow?.Close();
-        _audioManagerService.Dispose();
+        _coreStatePollTimer.Stop();
+        _coreEventListener.Dispose();
+        _coreClient.ShutdownCore();
 
         base.OnExit(e);
     }
@@ -99,6 +96,49 @@ public partial class App : System.Windows.Application
         _iconMicOn = File.Exists(onPath) ? new Icon(onPath) : SystemIcons.Information;
         _iconMicMuted = File.Exists(offPath) ? new Icon(offPath) : SystemIcons.Error;
         _iconSettings = File.Exists(settingsPath) ? new Icon(settingsPath) : SystemIcons.Application;
+    }
+
+    private static Icon CreateMicrophoneTrayIcon(bool muted)
+    {
+        using var bitmap = new Bitmap(32, 32);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+
+        using var pen = new Pen(muted ? Color.FromArgb(234, 51, 35) : Color.FromArgb(227, 227, 227), 3.2f)
+        {
+            StartCap = System.Drawing.Drawing2D.LineCap.Round,
+            EndCap = System.Drawing.Drawing2D.LineCap.Round
+        };
+        using var brush = new SolidBrush(muted ? Color.FromArgb(234, 51, 35) : Color.FromArgb(227, 227, 227));
+
+        graphics.DrawLine(pen, 16, 23, 16, 29);
+        graphics.DrawLine(pen, 11, 29, 21, 29);
+        graphics.DrawArc(pen, 7, 13, 18, 14, 0, 180);
+        using (var microphoneBody = CreateRoundedRectanglePath(new RectangleF(11, 3, 10, 18), 5))
+        {
+            graphics.FillPath(brush, microphoneBody);
+        }
+
+        if (muted)
+        {
+            graphics.DrawLine(pen, 5, 5, 27, 27);
+        }
+
+        var handle = bitmap.GetHicon();
+        return Icon.FromHandle(handle);
+    }
+
+    private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedRectanglePath(RectangleF rectangle, float radius)
+    {
+        var path = new System.Drawing.Drawing2D.GraphicsPath();
+        var diameter = radius * 2;
+        path.AddArc(rectangle.Left, rectangle.Top, diameter, diameter, 180, 90);
+        path.AddArc(rectangle.Right - diameter, rectangle.Top, diameter, diameter, 270, 90);
+        path.AddArc(rectangle.Right - diameter, rectangle.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(rectangle.Left, rectangle.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private void InitializeTrayIcon()
@@ -116,38 +156,30 @@ public partial class App : System.Windows.Application
             {
                 ToggleMicrophone();
             }
+            else if (args.Button == Forms.MouseButtons.Right)
+            {
+                ShowTrayMenu();
+            }
         };
+    }
 
-        var contextMenu = new Forms.ContextMenuStrip();
-        _settingsMenuItem = new Forms.ToolStripMenuItem("设置")
-        {
-            Image = (_iconSettings ?? SystemIcons.Application).ToBitmap()
-        };
-        _settingsMenuItem.Click += (_, _) => ShowSettingsWindow(SettingsTab.Hotkey);
-        contextMenu.Items.Add(_settingsMenuItem);
+    private void ShowTrayMenu()
+    {
+        _trayMenuWindow?.Close();
 
-        _osdToggleMenuItem = new Forms.ToolStripMenuItem("OSD显示")
-        {
-            CheckOnClick = true
-        };
-        _osdToggleMenuItem.CheckedChanged += (_, _) => ToggleOsdFeature();
-        contextMenu.Items.Add(_osdToggleMenuItem);
+        var showLegacy = _showLegacySettingsMenuOnce;
+        _showLegacySettingsMenuOnce = false;
+        var state = new TrayMenuState(_isMuted, _settings.EnableOsd, _settings.EnableSound, showLegacy);
+        var actions = new TrayMenuActions(
+            () => ShowWebSettingsWindow(SettingsTab.Hotkey),
+            () => ShowSettingsWindow(SettingsTab.Hotkey),
+            ToggleOsdFeature,
+            ToggleSoundFeature,
+            Shutdown);
 
-        _soundToggleMenuItem = new Forms.ToolStripMenuItem("提示音通知")
-        {
-            CheckOnClick = true
-        };
-        _soundToggleMenuItem.CheckedChanged += (_, _) => ToggleSoundFeature();
-        contextMenu.Items.Add(_soundToggleMenuItem);
-
-        contextMenu.Items.Add(new Forms.ToolStripSeparator());
-
-        var exitItem = new Forms.ToolStripMenuItem("退出");
-        exitItem.Click += (_, _) => Shutdown();
-        contextMenu.Items.Add(exitItem);
-        _notifyIcon.ContextMenuStrip = contextMenu;
-
-        UpdateFeatureMenuChecks();
+        _trayMenuWindow = new TrayMenuWindow(state, actions);
+        _trayMenuWindow.Closed += (_, _) => _trayMenuWindow = null;
+        _trayMenuWindow.ShowAt(new System.Windows.Point(Forms.Cursor.Position.X, Forms.Cursor.Position.Y));
     }
 
     private string GetTrayText(bool muted) => muted ? "麦克风已静音" : "麦克风已开启";
@@ -157,7 +189,8 @@ public partial class App : System.Windows.Application
         bool newState;
         try
         {
-            newState = _audioManagerService.ToggleMute(_settings.Microphones);
+            EnsureCoreConnection();
+            newState = _coreClient.ToggleMute(_settings.Microphones);
         }
         catch (Exception ex)
         {
@@ -201,6 +234,70 @@ public partial class App : System.Windows.Application
         _soundPlayerService.Play(sound);
     }
 
+    private void PollCoreMuteState()
+    {
+        bool latest;
+        try
+        {
+            latest = _coreClient.GetMuteState(_settings.Microphones);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (latest == _isMuted)
+        {
+            return;
+        }
+
+        ApplyMuteStateFeedback(latest);
+    }
+
+    private void OnCoreMuteChanged(bool muteState)
+    {
+        Dispatcher.BeginInvoke(() => ApplyMuteStateFeedback(muteState));
+    }
+
+    private void ApplyMuteStateFeedback(bool muteState)
+    {
+        if (muteState == _isMuted)
+        {
+            return;
+        }
+
+        _isMuted = muteState;
+        UpdateTrayIcon();
+        PlayStatusSound();
+        if (_settings.EnableOsd)
+        {
+            _osdWindow?.ShowStatus(_isMuted);
+        }
+    }
+
+    private void InitializeCoreConnection()
+    {
+        try
+        {
+            EnsureCoreConnection();
+            _coreClient.UpdateHotkey(_settings.ToggleHotkey, _settings.Microphones);
+            _isMuted = _coreClient.GetMuteState(_settings.Microphones);
+            UpdateTrayIcon();
+        }
+        catch
+        {
+            // Keep the UI alive even if the elevated Core process is unavailable.
+        }
+    }
+
+    private void EnsureCoreConnection()
+    {
+        if (!CoreClient.TryPing(TimeSpan.FromMilliseconds(250)))
+        {
+            CoreProcessLauncher.EnsureCoreStarted();
+        }
+    }
+
     private void RegisterGlobalHotkey(HotkeySetting hotkey)
     {
         if (_hotkeySource is not null)
@@ -241,7 +338,7 @@ public partial class App : System.Windows.Application
     private void ShowSettingsWindow(SettingsTab tab)
     {
         var settingsCopy = _settings.Clone();
-        var window = new SettingsWindow(settingsCopy, tab, ApplySettings, _soundPlayerService, _audioManagerService, _osdWindow);
+        var window = new SettingsWindow(settingsCopy, tab, ApplySettings, _soundPlayerService, _coreClient, _osdWindow);
 
         if (_osdWindow is not null && _osdWindow.IsLoaded)
         {
@@ -251,17 +348,43 @@ public partial class App : System.Windows.Application
         window.ShowDialog();
     }
 
+    private void ShowWebSettingsWindow(SettingsTab tab)
+    {
+        var settingsCopy = _settings.Clone();
+        var window = new WebSettingsWindow(settingsCopy, tab, ApplySettings, _soundPlayerService, _coreClient, _osdWindow, EnableLegacySettingsMenuOnce);
+
+        if (_osdWindow is not null && _osdWindow.IsLoaded)
+        {
+            window.Owner = _osdWindow;
+        }
+
+        window.ShowDialog();
+    }
+
+    private void EnableLegacySettingsMenuOnce()
+    {
+        _showLegacySettingsMenuOnce = true;
+    }
+
     private void ApplySettings(AppSettings newSettings)
     {
         _settings = newSettings;
         _settingsService.Save(_settings);
-        RegisterGlobalHotkey(_settings.ToggleHotkey);
+        try
+        {
+            EnsureCoreConnection();
+            _coreClient.UpdateHotkey(_settings.ToggleHotkey, _settings.Microphones);
+        }
+        catch
+        {
+            // Core may be unavailable; UI settings are still persisted.
+        }
         _osdWindow?.ApplySettings(_settings.Osd);
-        UpdateFeatureMenuChecks();
         UpdateStartupRegistration(_settings.RunOnStartup);
         try
         {
-            _audioManagerService.SetMute(_isMuted, _settings.Microphones);
+            EnsureCoreConnection();
+            _coreClient.SetMute(_isMuted, _settings.Microphones);
         }
         catch
         {
@@ -518,27 +641,9 @@ public partial class App : System.Windows.Application
         return current == expected;
     }
 
-    private void UpdateFeatureMenuChecks()
-    {
-        if (_osdToggleMenuItem is null || _soundToggleMenuItem is null)
-        {
-            return;
-        }
-
-        _updatingMenuChecks = true;
-        _osdToggleMenuItem.Checked = _settings.EnableOsd;
-        _soundToggleMenuItem.Checked = _settings.EnableSound;
-        _updatingMenuChecks = false;
-    }
-
     private void ToggleOsdFeature()
     {
-        if (_updatingMenuChecks || _osdToggleMenuItem is null)
-        {
-            return;
-        }
-
-        _settings.EnableOsd = _osdToggleMenuItem.Checked;
+        _settings.EnableOsd = !_settings.EnableOsd;
         if (!_settings.EnableOsd)
         {
             _osdWindow?.Hide();
@@ -548,12 +653,7 @@ public partial class App : System.Windows.Application
 
     private void ToggleSoundFeature()
     {
-        if (_updatingMenuChecks || _soundToggleMenuItem is null)
-        {
-            return;
-        }
-
-        _settings.EnableSound = _soundToggleMenuItem.Checked;
+        _settings.EnableSound = !_settings.EnableSound;
         PersistFeatureToggle();
     }
 
@@ -683,5 +783,3 @@ public partial class App : System.Windows.Application
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, IntPtr pData, ref uint pcbSize, uint cbSizeHeader);
 }
-
-

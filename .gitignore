@@ -485,3 +485,8 @@ $RECYCLE.BIN/
  
 # Local publish output 
 release-test/
+release/
+release-single/
+test/
+test_asInvoker/
+/font.ttc

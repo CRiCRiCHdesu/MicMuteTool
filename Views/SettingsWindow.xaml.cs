@@ -17,7 +17,7 @@ public partial class SettingsWindow : Window
 
     private readonly SettingsViewModel _viewModel;
     private readonly SoundPlayerService _soundPlayerService;
-    private readonly AudioManagerService _audioManagerService;
+    private readonly CoreClient _coreClient;
     private readonly Action<AppSettings> _onSave;
     private readonly OsdWindow? _osdWindow;
     private readonly string _defaultHint = "点击“设置热键”后，按下新的按键组合。按 ESC 取消。";
@@ -28,7 +28,7 @@ public partial class SettingsWindow : Window
     private PreviewMode _currentPreviewMode = PreviewMode.None;
     private PreviewMode _selectedPreviewStyle = PreviewMode.MicOn;
 
-    public SettingsWindow(AppSettings settings, SettingsTab initialTab, Action<AppSettings> onSave, SoundPlayerService soundPlayerService, AudioManagerService audioManagerService, OsdWindow? osdWindow = null)
+    public SettingsWindow(AppSettings settings, SettingsTab initialTab, Action<AppSettings> onSave, SoundPlayerService soundPlayerService, CoreClient coreClient, OsdWindow? osdWindow = null)
     {
         InitializeComponent();
         _originalSettings = settings.Clone();
@@ -36,7 +36,7 @@ public partial class SettingsWindow : Window
         DataContext = _viewModel;
         _onSave = onSave;
         _soundPlayerService = soundPlayerService;
-        _audioManagerService = audioManagerService;
+        _coreClient = coreClient;
         _osdWindow = osdWindow;
         _viewModel.OsdSettingsChanged += OnOsdSettingsChanged;
         if (_osdWindow is not null)
@@ -324,7 +324,12 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            var devices = _audioManagerService.GetMicrophoneDevices();
+            if (!CoreClient.TryPing(TimeSpan.FromMilliseconds(250)))
+            {
+                CoreProcessLauncher.EnsureCoreStarted();
+            }
+
+            var devices = _coreClient.GetMicrophoneDevices();
             _viewModel.UpdateMicrophoneDevices(devices);
         }
         catch (Exception ex)

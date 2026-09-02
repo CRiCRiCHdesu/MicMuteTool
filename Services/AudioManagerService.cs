@@ -11,8 +11,36 @@ public class AudioManagerService : IDisposable
 
     public bool GetMuteState(MicrophoneSettings? settings = null)
     {
-        using var device = GetReferenceDevice(settings);
-        return device?.AudioEndpointVolume.Mute ?? false;
+        var targetIds = GetTargetDeviceIds(settings).ToList();
+        if (targetIds.Count == 0)
+        {
+            using var device = GetDefaultCaptureDevice();
+            return device?.AudioEndpointVolume.Mute ?? false;
+        }
+
+        var checkedAny = false;
+        foreach (var id in targetIds)
+        {
+            using var device = GetDeviceById(id);
+            if (device is null)
+            {
+                continue;
+            }
+
+            checkedAny = true;
+            if (!device.AudioEndpointVolume.Mute)
+            {
+                return false;
+            }
+        }
+
+        if (checkedAny)
+        {
+            return true;
+        }
+
+        using var fallback = GetDefaultCaptureDevice();
+        return fallback?.AudioEndpointVolume.Mute ?? false;
     }
 
     public bool ToggleMute(MicrophoneSettings? settings = null)
@@ -148,20 +176,6 @@ public class AudioManagerService : IDisposable
         }
 
         return ids;
-    }
-
-    private MMDevice? GetReferenceDevice(MicrophoneSettings? settings)
-    {
-        foreach (var id in GetTargetDeviceIds(settings))
-        {
-            var device = GetDeviceById(id);
-            if (device is not null)
-            {
-                return device;
-            }
-        }
-
-        return GetDefaultCaptureDevice();
     }
 
     private MMDevice? GetDeviceById(string id)
